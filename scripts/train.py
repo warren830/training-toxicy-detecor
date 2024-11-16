@@ -173,12 +173,11 @@ if __name__ == "__main__":
             learning_rate=hyperparameters['learning_rate'],
             warmup_ratio=hyperparameters['warmup_ratio'],
             weight_decay=hyperparameters['weight_decay'],
-            evaluation_strategy="steps",
-            eval_steps=int(steps_per_epoch / 5),  # 每个epoch评估5次
-            save_strategy="epoch",
+            evaluation_strategy="epoch",  # 改为 "epoch"
+            save_strategy="epoch",  # 与 evaluation_strategy 保持一致
             logging_steps=50,
-            load_best_model_at_end=True,  # 加载验证效果最好的模型
-            metric_for_best_model="f1",  # 以F1为标准选择最佳模型
+            load_best_model_at_end=True,
+            metric_for_best_model="f1",
             logging_dir="/opt/ml/output/logs"
         )
         # 训练参数
