@@ -1,4 +1,6 @@
 import os
+import random
+
 import torch
 from torch import nn
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
@@ -17,7 +19,56 @@ hyperparameters = {
     'warmup_steps': int(os.environ.get('SM_HP_warmup_steps', '500')),
     'model_name': os.environ.get('SM_HP_model_name', 'thu-coai/roberta-base-cold')
 }
+def load_and_prepare_data():
+    print(f'{hyperparameters}')
 
+    # 获取数据路径
+    train_path = os.path.join(os.environ['SM_CHANNEL_TRAIN'], 'train_processed.jsonl')
+    eval_path = os.path.join(os.environ['SM_CHANNEL_EVAL'], 'eval_processed.jsonl')
+
+    # 加载数据集
+    train_dataset = load_dataset('json', data_files=train_path, split='train')
+    eval_dataset = load_dataset('json', data_files=eval_path, split='train')
+
+    # 初始化tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(hyperparameters['model_name'])
+
+    def preprocess_function(examples):
+        # Tokenize the texts
+        result = tokenizer(
+            examples['text'],
+            padding='max_length',
+            max_length=hyperparameters['max_length'],
+            truncation=True
+        )
+
+        if 'label' in examples:
+            result['labels'] = examples['label']
+        elif 'labels' in examples:
+            result['labels'] = examples['labels']
+        else:
+            raise ValueError("No 'label' or 'labels' field found in the dataset")
+
+        return result
+
+    # 处理数据集
+    train_dataset = train_dataset.map(
+        preprocess_function,
+        batched=True,
+        remove_columns=train_dataset.column_names
+    )
+
+    eval_dataset = eval_dataset.map(
+        preprocess_function,
+        batched=True,
+        remove_columns=eval_dataset.column_names
+    )
+
+    # 设置数据格式
+    train_dataset.set_format('torch', columns=['input_ids', 'attention_mask', 'labels'])
+    eval_dataset.set_format('torch', columns=['input_ids', 'attention_mask', 'labels'])
+
+    return train_dataset, eval_dataset, tokenizer
 
 def compute_metrics(pred):
     labels = pred.label_ids
@@ -77,29 +128,36 @@ def compute_loss(self, model, inputs, return_outputs=False):
     return (loss, outputs) if return_outputs else loss
 
 if __name__ == "__main__":
+    # 设置随机种子
+    torch.manual_seed(42)
+    random.seed(42)
+    np.random.seed(42)
+
+    # 加载和准备数据
+    train_dataset, eval_dataset, tokenizer = load_and_prepare_data()
     try:
         print("Starting training...")
         print(f"Hyperparameters: {hyperparameters}")
 
-        # 加载数据
-        print("Loading dataset...")
-        dataset = load_dataset('json', data_files={
-            'train': '/opt/ml/input/data/train/train.jsonl',
-            'validation': '/opt/ml/input/data/eval/eval.jsonl'
-        })
-        print(f"Dataset loaded: {dataset}")
+        # # 加载数据
+        # print("Loading dataset...")
+        # dataset = load_dataset('json', data_files={
+        #     'train': '/opt/ml/input/data/train/train.jsonl',
+        #     'validation': '/opt/ml/input/data/eval/eval.jsonl'
+        # })
+        # print(f"Dataset loaded: {dataset}")
 
-        # 初始化tokenizer
-        print("Initializing tokenizer...")
-        tokenizer = AutoTokenizer.from_pretrained(hyperparameters['model_name'])
-
-        # 数据预处理
-        print("Tokenizing datasets...")
-        tokenized_datasets = dataset.map(
-            tokenize_function,
-            batched=True,
-            remove_columns=dataset["train"].column_names
-        )
+        # # 初始化tokenizer
+        # print("Initializing tokenizer...")
+        # tokenizer = AutoTokenizer.from_pretrained(hyperparameters['model_name'])
+        #
+        # # 数据预处理
+        # print("Tokenizing datasets...")
+        # tokenized_datasets = dataset.map(
+        #     tokenize_function,
+        #     batched=True,
+        #     remove_columns=dataset["train"].column_names
+        # )
         # 计算相关参数
         total_train_samples = 11038  # 7361 + 3677
         steps_per_epoch = total_train_samples // hyperparameters['train_batch_size']
@@ -146,8 +204,8 @@ if __name__ == "__main__":
         trainer = Trainer(
             model_init=model_init,
             args=training_args,
-            train_dataset=tokenized_datasets["train"],
-            eval_dataset=tokenized_datasets["validation"],
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
             compute_loss=compute_loss,
             compute_metrics=compute_metrics,
             callbacks=[CustomCallback()]
