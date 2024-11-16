@@ -63,6 +63,7 @@ def setup_training():
             'model_name': 'thu-coai/roberta-base-cold',
             'warmup_ratio': 0.1,  # 改用ratio替代固定步数
             'weight_decay': 0.01,
+            'max_length': 128  # 添加这行
         }
     )
     print(f'sdf')

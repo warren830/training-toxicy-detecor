@@ -17,7 +17,8 @@ hyperparameters = {
     'epochs': float(os.environ.get('SM_HP_epochs', '5')),
     'weight_decay': float(os.environ.get('SM_HP_weight_decay', '0.01')),
     'warmup_steps': int(os.environ.get('SM_HP_warmup_steps', '500')),
-    'model_name': os.environ.get('SM_HP_model_name', 'thu-coai/roberta-base-cold')
+    'model_name': os.environ.get('SM_HP_model_name', 'thu-coai/roberta-base-cold'),
+    'max_length': int(os.environ.get('SM_HP_max_length', '128'))  # 添加这行
 }
 def load_and_prepare_data():
     print(f'{hyperparameters}')
